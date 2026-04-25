@@ -1,0 +1,6 @@
+
+{
+  "name": "DailyRush Tracker",
+  "description": "A minimalist and elegant daily logger where you can record a single number from 1 to 10 each day to track your personal trends over time.",
+  "requestFramePermissions": []
+}
