@@ -1,20 +1,42 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Daily Rush Tracker
 
-# Run and deploy your AI Studio app
+A React-based web application for tracking daily tasks and productivity.
 
-This contains everything you need to run your app locally.
+## Tech Stack
 
-View your app in AI Studio: https://ai.studio/apps/drive/1j-UW8MV2X2O6JIjYEsi_gC9k1cp_-iwJ
+- **React 19** — UI framework
+- **Vite** — Build tool
+- **TypeScript** — Type safety
+- **Recharts** — Data visualization
+- **Lucide React** — Icons
 
-## Run Locally
+## Getting Started
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js
 
+```
+npm install
+npm run dev
+npm run build
+npm run preview
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Project Structure
+
+- `App.tsx` — Main application component
+- `index.tsx` — Entry point
+- `index.html` — HTML template
+- `types.ts` — TypeScript type definitions
+- `components/HistoryChart.tsx` — Chart component
+- `components/SelectionCard.tsx` — Card component
+- `vite.config.ts` — Vite configuration
+
+## Features
+
+- Task tracking and daily progress monitoring
+- Interactive charts for visualizing productivity data
+- Responsive design with modern UI components
+
+## License
+
+MIT
