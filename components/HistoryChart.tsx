@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   AreaChart, 
   Area, 
@@ -16,10 +16,21 @@ interface HistoryChartProps {
   data: DailySelection[];
 }
 
+type ChartPoint = DailySelection & {
+  time: number;
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const parseLocalDate = (date: string) => {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).getTime();
+};
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
-    const data: DailySelection = payload[0].payload;
-    const date = new Date(data.date).toLocaleDateString('en-US', { 
+    const data: ChartPoint = payload[0].payload;
+    const date = new Date(data.time).toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric', 
       year: 'numeric' 
@@ -50,7 +61,27 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 const HistoryChart: React.FC<HistoryChartProps> = ({ data }) => {
-  const formatXAxis = (tickItem: string) => {
+  const chartData = useMemo<ChartPoint[]>(() => {
+    return data
+      .map((entry) => ({
+        ...entry,
+        time: parseLocalDate(entry.date)
+      }))
+      .sort((a, b) => a.time - b.time);
+  }, [data]);
+
+  const xDomain = useMemo<[number, number]>(() => {
+    if (chartData.length === 1) {
+      return [chartData[0].time - DAY_MS, chartData[0].time + DAY_MS];
+    }
+
+    return [
+      Math.min(...chartData.map((entry) => entry.time)),
+      Math.max(...chartData.map((entry) => entry.time))
+    ];
+  }, [chartData]);
+
+  const formatXAxis = (tickItem: number) => {
     const d = new Date(tickItem);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
@@ -59,7 +90,7 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ data }) => {
     <div className="w-full h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
-          data={data}
+          data={chartData}
           margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
         >
           <defs>
@@ -74,7 +105,10 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ data }) => {
             stroke="#f1f5f9" 
           />
           <XAxis 
-            dataKey="date" 
+            dataKey="time"
+            type="number"
+            scale="time"
+            domain={xDomain}
             tickFormatter={formatXAxis}
             axisLine={false}
             tickLine={false}
@@ -96,6 +130,7 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ data }) => {
             dataKey="value" 
             stroke="#4f46e5" 
             strokeWidth={4}
+            dot={{ r: 4, strokeWidth: 3, stroke: '#ffffff', fill: '#4f46e5' }}
             fillOpacity={1} 
             fill="url(#colorValue)" 
             animationDuration={1000}

@@ -3,9 +3,36 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DailySelection, NumberRange } from './types';
 import SelectionCard from './components/SelectionCard';
 import HistoryChart from './components/HistoryChart';
-import { Calendar, TrendingUp, Info, BookOpen, Clock, ChevronRight, PenLine, Zap } from 'lucide-react';
+import { Calendar, TrendingUp, Info, BookOpen, Clock, ChevronRight, PenLine, Zap, Download, FileSpreadsheet } from 'lucide-react';
 
 const STORAGE_KEY = 'daily_rush_data_v2';
+
+const escapeCsvCell = (value: string | number) => {
+  const text = String(value ?? '');
+  const escaped = text.replace(/"/g, '""');
+  return /[",\n\r]/.test(text) ? `"${escaped}"` : escaped;
+};
+
+const escapeHtml = (value: string | number) => {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const downloadFile = (content: string, filename: string, type: string) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 const App: React.FC = () => {
   const [history, setHistory] = useState<DailySelection[]>([]);
@@ -64,6 +91,44 @@ const App: React.FC = () => {
       setNote('');
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHistory));
     }
+  };
+
+  const exportRows = useMemo(() => {
+    return history.map((entry) => ({
+      Date: entry.date,
+      Score: entry.value,
+      Note: entry.note || '',
+      SubmittedAt: new Date(entry.timestamp).toISOString()
+    }));
+  }, [history]);
+
+  const exportCsv = () => {
+    const headers = ['Date', 'Score', 'Note', 'SubmittedAt'];
+    const rows = exportRows.map((row) => headers.map((header) => escapeCsvCell(row[header as keyof typeof row])).join(','));
+    const csv = `\uFEFF${headers.join(',')}\n${rows.join('\n')}`;
+    downloadFile(csv, `dailyrush-history-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+  };
+
+  const exportExcel = () => {
+    const headers = ['Date', 'Score', 'Note', 'SubmittedAt'];
+    const tableRows = exportRows.map((row) => (
+      `<tr>${headers.map((header) => `<td>${escapeHtml(row[header as keyof typeof row])}</td>`).join('')}</tr>`
+    )).join('');
+    const tableHeaders = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('');
+    const sheet = `
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+        </head>
+        <body>
+          <table>
+            <thead><tr>${tableHeaders}</tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    downloadFile(sheet, `dailyrush-history-${new Date().toISOString().split('T')[0]}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
   };
 
   return (
@@ -147,13 +212,33 @@ const App: React.FC = () => {
 
         {/* Analytics Section */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between px-2">
+          <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
                 <TrendingUp size={16} className="text-indigo-600" />
               </div>
               Pulse
             </h3>
+            {history.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportCsv}
+                  title="Download CSV"
+                  className="h-9 px-3 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                >
+                  <Download size={14} />
+                  CSV
+                </button>
+                <button
+                  onClick={exportExcel}
+                  title="Download Excel sheet"
+                  className="h-9 px-3 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-green-600 hover:border-green-200 hover:bg-green-50 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                >
+                  <FileSpreadsheet size={14} />
+                  Excel
+                </button>
+              </div>
+            )}
           </div>
           
           <div className="bg-white rounded-[2rem] shadow-lg shadow-slate-200/40 p-6 border border-slate-100">
