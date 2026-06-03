@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DailySelection, Track, TrackMode } from './types';
 import SelectionCard from './components/SelectionCard';
-import HistoryChart from './components/HistoryChart';
+import HistoryChart from './HistoryChart';
 import {
   Calendar,
   TrendingUp,
