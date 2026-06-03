@@ -1,52 +1,66 @@
 
 import React, { useState, useEffect } from 'react';
-import { NumberRange } from '../types';
 
 interface SelectionCardProps {
-  onSelect: (value: NumberRange) => void;
-  currentSelection?: NumberRange;
+  onSelect: (value: number) => void;
+  currentSelection?: number;
+  minValue: number;
+  maxValue: number;
 }
 
-const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelection }) => {
-  const [sliderValue, setSliderValue] = useState<number>(currentSelection || 5);
+const getMidpoint = (minValue: number, maxValue: number) => Math.round((minValue + maxValue) / 2);
+
+const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelection, minValue, maxValue }) => {
+  const [sliderValue, setSliderValue] = useState<number>(currentSelection ?? getMidpoint(minValue, maxValue));
   const [isDragging, setIsDragging] = useState(false);
+  const rangeSpan = Math.max(maxValue - minValue, 1);
 
   useEffect(() => {
-    if (currentSelection !== undefined) {
-      setSliderValue(currentSelection);
-    }
-  }, [currentSelection]);
+    setSliderValue(currentSelection ?? getMidpoint(minValue, maxValue));
+  }, [currentSelection, minValue, maxValue]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10) as NumberRange;
+    const val = parseInt(e.target.value, 10);
     setSliderValue(val);
     onSelect(val);
   };
 
   const jumpTo = (val: number) => {
     setSliderValue(val);
-    onSelect(val as NumberRange);
+    onSelect(val);
   };
 
+  const getRatio = (val: number) => (val - minValue) / rangeSpan;
+
   const getThemeColor = (val: number) => {
-    if (val <= 3) return "rgb(249, 115, 22)"; // Orange-500
-    if (val <= 7) return "rgb(79, 70, 229)"; // Indigo-600
+    const ratio = getRatio(val);
+    if (ratio <= 0.3) return "rgb(249, 115, 22)"; // Orange-500
+    if (ratio <= 0.7) return "rgb(79, 70, 229)"; // Indigo-600
     return "rgb(34, 197, 94)"; // Green-500
   };
 
   const getMoodLabel = (val: number) => {
-    if (val <= 2) return "Struggling";
-    if (val <= 4) return "Manageable";
-    if (val <= 6) return "Doing Well";
-    if (val <= 8) return "Feeling Great";
-    return "Outstanding!";
+    const ratio = getRatio(val);
+    if (ratio <= 0.2) return "Low";
+    if (ratio <= 0.4) return "Building";
+    if (ratio <= 0.6) return "Steady";
+    if (ratio <= 0.8) return "Strong";
+    return "Peak";
   };
 
   const getColorClass = (val: number) => {
-    if (val <= 3) return "text-orange-600";
-    if (val <= 7) return "text-indigo-600";
+    const ratio = getRatio(val);
+    if (ratio <= 0.3) return "text-orange-600";
+    if (ratio <= 0.7) return "text-indigo-600";
     return "text-green-600";
   };
+
+  const tickCount = maxValue - minValue + 1;
+  const ticks = tickCount <= 12
+    ? Array.from({ length: tickCount }, (_, index) => minValue + index)
+    : Array.from(
+        new Set(Array.from({ length: 6 }, (_, index) => Math.round(minValue + (rangeSpan * index) / 5)))
+      );
 
   return (
     <div className="w-full py-4 select-none">
@@ -84,7 +98,7 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
           <div 
             className="h-full transition-all duration-500 ease-out opacity-30"
             style={{ 
-              width: `${((sliderValue - 1) / 9) * 100}%`,
+              width: `${getRatio(sliderValue) * 100}%`,
               backgroundColor: getThemeColor(sliderValue)
             }}
           />
@@ -93,8 +107,8 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
         {/* The Native Slider Input (Hidden but Functional) */}
         <input
           type="range"
-          min="1"
-          max="10"
+          min={minValue}
+          max={maxValue}
           step="1"
           value={sliderValue}
           onChange={handleChange}
@@ -116,7 +130,7 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
 
         {/* Tapable Tick Marks & Numbers */}
         <div className="flex justify-between mt-4 relative z-10">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((tick) => (
+          {ticks.map((tick) => (
             <button
               key={tick}
               onClick={() => jumpTo(tick)}
