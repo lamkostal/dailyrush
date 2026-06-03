@@ -7,9 +7,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
+  Line
 } from 'recharts';
-import { DailySelection, TrackMode } from '../types';
+import { DailySelection, TrackMode } from './types';
 
 interface HistoryChartProps {
   data: DailySelection[];
@@ -17,10 +18,14 @@ interface HistoryChartProps {
   minValue: number;
   maxValue: number;
   trackName: string;
+  showLeastSquares: boolean;
+  showEma: boolean;
 }
 
 type ChartPoint = DailySelection & {
   time: number;
+  leastSquaresValue?: number;
+  emaValue?: number;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -51,6 +56,52 @@ const makeTicks = (minValue: number, maxValue: number, mode: TrackMode) => {
   return Array.from(
     new Set(Array.from({ length: 6 }, (_, index) => Math.round(minValue + (span * index) / 5)))
   );
+};
+
+const addLeastSquaresValues = (points: ChartPoint[]) => {
+  if (points.length < 2) return points;
+
+  const origin = points[0].time;
+  const values = points.map((point) => ({
+    x: (point.time - origin) / DAY_MS,
+    y: point.value
+  }));
+  const count = values.length;
+  const sumX = values.reduce((sum, point) => sum + point.x, 0);
+  const sumY = values.reduce((sum, point) => sum + point.y, 0);
+  const sumXY = values.reduce((sum, point) => sum + point.x * point.y, 0);
+  const sumXX = values.reduce((sum, point) => sum + point.x * point.x, 0);
+  const denominator = count * sumXX - sumX * sumX;
+
+  if (denominator === 0) return points;
+
+  const slope = (count * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / count;
+
+  return points.map((point) => ({
+    ...point,
+    leastSquaresValue: intercept + slope * ((point.time - origin) / DAY_MS)
+  }));
+};
+
+const addEmaValues = (points: ChartPoint[]) => {
+  if (points.length < 2) return points;
+
+  const alpha = 0.35;
+  let previousEma = points[0].value;
+
+  return points.map((point, index) => {
+    const emaValue = index === 0
+      ? point.value
+      : alpha * point.value + (1 - alpha) * previousEma;
+
+    previousEma = emaValue;
+
+    return {
+      ...point,
+      emaValue
+    };
+  });
 };
 
 const CustomTooltip = ({ active, payload, mode, minValue, maxValue, trackName }: any) => {
@@ -88,15 +139,18 @@ const CustomTooltip = ({ active, payload, mode, minValue, maxValue, trackName }:
   return null;
 };
 
-const HistoryChart: React.FC<HistoryChartProps> = ({ data, mode, minValue, maxValue, trackName }) => {
+const HistoryChart: React.FC<HistoryChartProps> = ({ data, mode, minValue, maxValue, trackName, showLeastSquares, showEma }) => {
   const chartData = useMemo<ChartPoint[]>(() => {
-    return data
+    const sortedPoints = data
       .map((entry) => ({
         ...entry,
         time: parseLocalDate(entry.date)
       }))
       .sort((a, b) => a.time - b.time);
-  }, [data]);
+
+    const emaPoints = showEma ? addEmaValues(sortedPoints) : sortedPoints;
+    return showLeastSquares ? addLeastSquaresValues(emaPoints) : emaPoints;
+  }, [data, showLeastSquares, showEma]);
 
   const xDomain = useMemo<[number, number]>(() => {
     if (chartData.length === 1) {
@@ -179,6 +233,31 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ data, mode, minValue, maxVa
             animationDuration={1000}
             activeDot={{ r: 8, strokeWidth: 0, fill: lineColor }}
           />
+          {showEma && chartData.length > 1 && (
+            <Line
+              type="monotone"
+              dataKey="emaValue"
+              name="EMA"
+              stroke="#0d9488"
+              strokeWidth={3}
+              dot={false}
+              activeDot={false}
+              isAnimationActive={false}
+            />
+          )}
+          {showLeastSquares && chartData.length > 1 && (
+            <Line
+              type="linear"
+              dataKey="leastSquaresValue"
+              name="Least squares"
+              stroke="#f97316"
+              strokeWidth={3}
+              strokeDasharray="7 5"
+              dot={false}
+              activeDot={false}
+              isAnimationActive={false}
+            />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </div>

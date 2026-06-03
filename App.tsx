@@ -42,6 +42,8 @@ const createDefaultTrack = (history: DailySelection[] = []): Track => ({
   mode: 'score',
   minScore: 1,
   maxScore: 10,
+  showLeastSquares: false,
+  showEma: false,
   history,
   createdAt: Date.now()
 });
@@ -87,6 +89,8 @@ const normalizeTrack = (track: any): Track | null => {
     mode,
     minScore,
     maxScore,
+    showLeastSquares: Boolean(track.showLeastSquares),
+    showEma: Boolean(track.showEma),
     history: normalizeHistory(track.history, mode, minScore, maxScore),
     createdAt: normalizeNumber(track.createdAt, Date.now())
   };
@@ -315,6 +319,8 @@ const App: React.FC = () => {
       mode,
       minScore: mode === 'point' ? 0 : minScore,
       maxScore: mode === 'point' ? 1 : maxScore,
+      showLeastSquares: false,
+      showEma: false,
       history: [],
       createdAt: Date.now()
     };
@@ -370,6 +376,20 @@ const App: React.FC = () => {
       setActiveTrackId(remainingTracks[Math.max(0, activeIndex - 1)]?.id || remainingTracks[0].id);
       setIsEditingTrack(false);
     }
+  };
+
+  const toggleLeastSquares = () => {
+    updateActiveTrack((track) => ({
+      ...track,
+      showLeastSquares: !track.showLeastSquares
+    }));
+  };
+
+  const toggleEma = () => {
+    updateActiveTrack((track) => ({
+      ...track,
+      showEma: !track.showEma
+    }));
   };
 
   const exportRows = useMemo(() => {
@@ -780,7 +800,33 @@ const App: React.FC = () => {
               Pulse
             </h3>
             {history.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={toggleLeastSquares}
+                  disabled={history.length < 2}
+                  title={history.length < 2 ? 'Add at least two entries to show least squares' : 'Toggle least squares trend'}
+                  className={`h-9 px-3 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
+                    activeTrack.showLeastSquares
+                      ? 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50'
+                  } disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-slate-600 disabled:hover:border-slate-200`}
+                >
+                  <TrendingUp size={14} />
+                  Least Squares
+                </button>
+                <button
+                  onClick={toggleEma}
+                  disabled={history.length < 2}
+                  title={history.length < 2 ? 'Add at least two entries to show EMA' : 'Toggle EMA trend'}
+                  className={`h-9 px-3 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
+                    activeTrack.showEma
+                      ? 'bg-teal-600 border-teal-600 text-white hover:bg-teal-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50'
+                  } disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-slate-600 disabled:hover:border-slate-200`}
+                >
+                  <TrendingUp size={14} />
+                  EMA
+                </button>
                 <button
                   onClick={exportCsv}
                   title="Download CSV"
@@ -809,6 +855,8 @@ const App: React.FC = () => {
                 minValue={activeTrack.minScore}
                 maxValue={activeTrack.maxScore}
                 trackName={activeTrack.name}
+                showLeastSquares={activeTrack.showLeastSquares}
+                showEma={activeTrack.showEma}
               />
             ) : (
               <div className="h-[250px] flex flex-col items-center justify-center text-slate-300 gap-4">

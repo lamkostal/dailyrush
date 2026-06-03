@@ -14,6 +14,8 @@ export interface Track {
   mode: TrackMode;
   minScore: number;
   maxScore: number;
+  showLeastSquares: boolean;
+  showEma: boolean;
   history: DailySelection[];
   createdAt: number;
 }
