@@ -29,7 +29,7 @@ const LEGACY_STORAGE_KEY = 'daily_rush_data_v2';
 
 type AppState = {
   tracks: Track[];
-  activeTrackId: string;
+  activeTrackId: string | null;
 };
 
 const todayIso = () => new Date().toISOString().split('T')[0];
@@ -42,6 +42,7 @@ const createDefaultTrack = (history: DailySelection[] = []): Track => ({
   mode: 'score',
   minScore: 1,
   maxScore: 10,
+  showOriginalCurve: true,
   showLeastSquares: false,
   showEma: false,
   history,
@@ -89,6 +90,7 @@ const normalizeTrack = (track: any): Track | null => {
     mode,
     minScore,
     maxScore,
+    showOriginalCurve: track.showOriginalCurve !== false,
     showLeastSquares: Boolean(track.showLeastSquares),
     showEma: Boolean(track.showEma),
     history: normalizeHistory(track.history, mode, minScore, maxScore),
@@ -97,10 +99,8 @@ const normalizeTrack = (track: any): Track | null => {
 };
 
 const loadAppState = (): AppState => {
-  const fallbackTrack = createDefaultTrack();
-
   if (typeof localStorage === 'undefined') {
-    return { tracks: [fallbackTrack], activeTrackId: fallbackTrack.id };
+    return { tracks: [], activeTrackId: null };
   }
 
   try {
@@ -117,6 +117,8 @@ const loadAppState = (): AppState => {
         const activeTrackId = tracks.some((track) => track.id === requestedActiveId) ? requestedActiveId : tracks[0].id;
         return { tracks, activeTrackId };
       }
+
+      return { tracks: [], activeTrackId: null };
     }
   } catch (error) {
     console.warn('Unable to load saved tracks.', error);
@@ -133,7 +135,7 @@ const loadAppState = (): AppState => {
     console.warn('Unable to migrate legacy history.', error);
   }
 
-  return { tracks: [fallbackTrack], activeTrackId: fallbackTrack.id };
+  return { tracks: [], activeTrackId: null };
 };
 
 const escapeCsvCell = (value: string | number) => {
@@ -186,10 +188,10 @@ const getScoreBounds = (minValue: string, maxValue: string) => {
 const App: React.FC = () => {
   const [initialState] = useState<AppState>(loadAppState);
   const [tracks, setTracks] = useState<Track[]>(initialState.tracks);
-  const [activeTrackId, setActiveTrackId] = useState<string>(initialState.activeTrackId);
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(initialState.activeTrackId);
   const [selectedDate, setSelectedDate] = useState<string>(todayIso());
   const [note, setNote] = useState<string>('');
-  const [isCreatingTrack, setIsCreatingTrack] = useState(false);
+  const [isCreatingTrack, setIsCreatingTrack] = useState(initialState.tracks.length === 0);
   const [newTrackName, setNewTrackName] = useState('');
   const [newTrackMode, setNewTrackMode] = useState<TrackMode>('score');
   const [newMinScore, setNewMinScore] = useState('1');
@@ -202,8 +204,8 @@ const App: React.FC = () => {
   const [settingsMinScore, setSettingsMinScore] = useState('1');
   const [settingsMaxScore, setSettingsMaxScore] = useState('10');
 
-  const activeTrack = useMemo(() => {
-    return tracks.find((track) => track.id === activeTrackId) || tracks[0];
+  const activeTrack = useMemo<Track | null>(() => {
+    return tracks.find((track) => track.id === activeTrackId) || tracks[0] || null;
   }, [tracks, activeTrackId]);
 
   const history = activeTrack?.history || [];
@@ -211,6 +213,9 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!tracks.some((track) => track.id === activeTrackId) && tracks.length > 0) {
       setActiveTrackId(tracks[0].id);
+    }
+    if (tracks.length === 0 && activeTrackId !== null) {
+      setActiveTrackId(null);
     }
   }, [tracks, activeTrackId]);
 
@@ -236,9 +241,11 @@ const App: React.FC = () => {
     setSettingsMode(activeTrack.mode);
     setSettingsMinScore(String(activeTrack.minScore || 1));
     setSettingsMaxScore(String(activeTrack.maxScore || 10));
-  }, [activeTrackId]);
+  }, [activeTrack, activeTrackId]);
 
   const updateActiveTrack = useCallback((updater: (track: Track) => Track) => {
+    if (!activeTrackId) return;
+
     setTracks((currentTracks) => currentTracks.map((track) => (
       track.id === activeTrackId ? updater(track) : track
     )));
@@ -319,6 +326,7 @@ const App: React.FC = () => {
       mode,
       minScore: mode === 'point' ? 0 : minScore,
       maxScore: mode === 'point' ? 1 : maxScore,
+      showOriginalCurve: true,
       showLeastSquares: false,
       showEma: false,
       history: [],
@@ -335,6 +343,8 @@ const App: React.FC = () => {
   };
 
   const openTrackSettings = () => {
+    if (!activeTrack) return;
+
     setSettingsName(activeTrack.name);
     setSettingsMode(activeTrack.mode);
     setSettingsMinScore(String(activeTrack.mode === 'point' ? 1 : activeTrack.minScore));
@@ -367,25 +377,39 @@ const App: React.FC = () => {
   };
 
   const deleteActiveTrack = () => {
-    if (!activeTrack || tracks.length <= 1) return;
+    if (!activeTrack) return;
 
     if (window.confirm(`Delete "${activeTrack.name}" and all of its entries?`)) {
       const activeIndex = tracks.findIndex((track) => track.id === activeTrack.id);
       const remainingTracks = tracks.filter((track) => track.id !== activeTrack.id);
       setTracks(remainingTracks);
-      setActiveTrackId(remainingTracks[Math.max(0, activeIndex - 1)]?.id || remainingTracks[0].id);
+      setActiveTrackId(remainingTracks[Math.max(0, activeIndex - 1)]?.id || remainingTracks[0]?.id || null);
+      setIsCreatingTrack(remainingTracks.length === 0);
       setIsEditingTrack(false);
     }
   };
 
   const toggleLeastSquares = () => {
+    if (!activeTrack) return;
+
     updateActiveTrack((track) => ({
       ...track,
       showLeastSquares: !track.showLeastSquares
     }));
   };
 
+  const toggleOriginalCurve = () => {
+    if (!activeTrack) return;
+
+    updateActiveTrack((track) => ({
+      ...track,
+      showOriginalCurve: !track.showOriginalCurve
+    }));
+  };
+
   const toggleEma = () => {
+    if (!activeTrack) return;
+
     updateActiveTrack((track) => ({
       ...track,
       showEma: !track.showEma
@@ -393,6 +417,8 @@ const App: React.FC = () => {
   };
 
   const exportRows = useMemo(() => {
+    if (!activeTrack) return [];
+
     return history.map((entry) => ({
       Track: activeTrack.name,
       Date: entry.date,
@@ -404,6 +430,8 @@ const App: React.FC = () => {
   }, [history, activeTrack]);
 
   const exportCsv = () => {
+    if (!activeTrack) return;
+
     const headers = ['Track', 'Date', 'Type', 'Value', 'Note', 'SubmittedAt'];
     const rows = exportRows.map((row) => headers.map((header) => escapeCsvCell(row[header as keyof typeof row])).join(','));
     const csv = `\uFEFF${headers.join(',')}\n${rows.join('\n')}`;
@@ -411,6 +439,8 @@ const App: React.FC = () => {
   };
 
   const exportExcel = () => {
+    if (!activeTrack) return;
+
     const headers = ['Track', 'Date', 'Type', 'Value', 'Note', 'SubmittedAt'];
     const tableRows = exportRows.map((row) => (
       `<tr>${headers.map((header) => `<td>${escapeHtml(row[header as keyof typeof row])}</td>`).join('')}</tr>`
@@ -433,14 +463,16 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 selection:bg-indigo-100">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-12 selection:bg-indigo-100">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm backdrop-blur-md bg-white/80">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-200">
               <Zap size={22} className="fill-current" />
             </div>
-            <h1 className="text-xl font-black tracking-tighter text-slate-800 lowercase">dailyrush</h1>
+            <div className="leading-none">
+              <h1 className="text-xl font-black tracking-tighter text-slate-800 lowercase">dailyrush</h1>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mr-2">
@@ -459,46 +491,94 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
+        <div className="border-t border-slate-100 bg-slate-50/80">
+          <div className="max-w-5xl mx-auto px-4 py-1.5">
+            <p className="text-[10px] font-bold uppercase leading-snug tracking-[0.18em] text-slate-400">
+              Track anything with dailyrush, from habits to scores.
+            </p>
+          </div>
+        </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 mt-6 space-y-6">
-        <section className="space-y-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {tracks.map((track) => {
-              const isActive = track.id === activeTrack.id;
-              return (
-                <button
-                  key={track.id}
-                  onClick={() => setActiveTrackId(track.id)}
-                  className={`min-w-[150px] flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all ${
-                    isActive
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-300/60'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isActive ? 'bg-white/10' : 'bg-indigo-50 text-indigo-600'}`}>
-                    {track.mode === 'point' ? <CircleDot size={17} /> : <ListChecks size={17} />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-black truncate">{track.name}</p>
-                    <p className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
-                      {track.mode === 'point' ? 'Points' : `${track.minScore}-${track.maxScore}`} - {track.history.length}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setIsCreatingTrack(true)}
-              className="h-[66px] w-[66px] rounded-2xl border border-dashed border-slate-300 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex items-center justify-center shrink-0"
-              title="Add track"
-            >
-              <Plus size={22} />
-            </button>
-          </div>
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 mt-4 space-y-4">
+        <section className="space-y-2">
+          {tracks.length > 0 ? (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {tracks.map((track) => {
+                const isActive = track.id === activeTrack?.id;
+                return (
+                  <button
+                    key={track.id}
+                    onClick={() => setActiveTrackId(track.id)}
+                    className={`min-w-[140px] flex items-center gap-2 rounded-2xl border px-3 py-2 text-left transition-all ${
+                      isActive
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-300/60'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isActive ? 'bg-white/10' : 'bg-indigo-50 text-indigo-600'}`}>
+                      {track.mode === 'point' ? <CircleDot size={17} /> : <ListChecks size={17} />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-black truncate">{track.name}</p>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                        {track.mode === 'point' ? 'Points' : `${track.minScore}-${track.maxScore}`} - {track.history.length}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setIsCreatingTrack(true)}
+                className="h-[58px] w-[58px] rounded-2xl border border-dashed border-slate-300 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex items-center justify-center shrink-0"
+                title="Add track"
+              >
+                <Plus size={22} />
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-[1.5rem] border border-slate-100 shadow-xl shadow-slate-200/40 p-5 sm:p-6">
+              <div className="max-w-2xl">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-500">Start here</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-800">Add your first track</h2>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">
+                  Create a score track for anything you rate, or a point track for simple yes/no moments you want to keep showing up for.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewTrackMode('score');
+                      setIsCreatingTrack(true);
+                    }}
+                    className="h-10 px-4 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  >
+                    <ListChecks size={14} />
+                    Score Track
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewTrackMode('point');
+                      setIsCreatingTrack(true);
+                    }}
+                    className="h-10 px-4 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  >
+                    <CircleDot size={14} />
+                    Point Track
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {isCreatingTrack && (
-            <form onSubmit={createTrack} className="bg-white rounded-[1.5rem] border border-slate-100 shadow-lg shadow-slate-200/40 p-5 grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+            <form onSubmit={createTrack} className="bg-white rounded-[1.5rem] border border-slate-100 shadow-lg shadow-slate-200/40 p-4 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+              {tracks.length === 0 && (
+                <div className="md:col-start-1 md:col-end-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Your first track</p>
+                </div>
+              )}
               <label className="space-y-2">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Track Name</span>
                 <input
@@ -575,9 +655,11 @@ const App: React.FC = () => {
           )}
         </section>
 
-        <div className="bg-white rounded-[2rem] shadow-xl shadow-slate-200/40 overflow-hidden border border-slate-100 transition-all">
-          <div className="p-8 pb-0">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        {activeTrack && (
+          <>
+        <div className="bg-white rounded-[1.5rem] shadow-xl shadow-slate-200/40 overflow-hidden border border-slate-100 transition-all">
+          <div className="px-5 pt-5 pb-0 sm:px-6 sm:pt-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex flex-col gap-1">
                 {renamingTrackId === activeTrack.id ? (
                   <div className="flex items-center gap-2">
@@ -640,9 +722,8 @@ const App: React.FC = () => {
               </div>
               <button
                 onClick={deleteActiveTrack}
-                disabled={tracks.length <= 1}
                 title="Delete track"
-                className="w-10 h-10 rounded-xl border border-slate-200 text-slate-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-white transition-all flex items-center justify-center"
+                className="w-10 h-10 rounded-xl border border-slate-200 text-slate-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all flex items-center justify-center"
               >
                 <Trash2 size={16} />
               </button>
@@ -650,7 +731,7 @@ const App: React.FC = () => {
           </div>
 
           {isEditingTrack && (
-            <form onSubmit={saveTrackSettings} className="mx-8 mt-6 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-5 grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+            <form onSubmit={saveTrackSettings} className="mx-5 sm:mx-6 mt-4 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
               <label className="space-y-2">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Track Name</span>
                 <input
@@ -723,8 +804,7 @@ const App: React.FC = () => {
                 <button
                   type="button"
                   onClick={deleteActiveTrack}
-                  disabled={tracks.length <= 1}
-                  className="h-11 px-5 rounded-2xl bg-white border border-red-100 text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-white transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  className="h-11 px-5 rounded-2xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
                 >
                   <Trash2 size={14} />
                   Delete Track
@@ -733,7 +813,7 @@ const App: React.FC = () => {
             </form>
           )}
 
-          <div className="p-8 pt-4">
+          <div className="px-5 pb-5 pt-3 sm:px-6 sm:pb-6">
             {activeTrack.mode === 'score' ? (
               <SelectionCard
                 onSelect={handleSelect}
@@ -742,10 +822,10 @@ const App: React.FC = () => {
                 maxValue={activeTrack.maxScore}
               />
             ) : (
-              <div className="py-8 flex flex-col items-center">
+              <div className="py-4 flex flex-col items-center">
                 <button
                   onClick={() => handleSelect(1)}
-                  className={`w-36 h-36 rounded-[2rem] flex flex-col items-center justify-center gap-3 shadow-2xl transition-all active:scale-95 ${
+                  className={`w-28 h-28 sm:w-32 sm:h-32 rounded-[1.5rem] flex flex-col items-center justify-center gap-2 shadow-2xl transition-all active:scale-95 ${
                     currentEntry
                       ? 'bg-emerald-500 text-white shadow-emerald-200'
                       : 'bg-slate-100 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 shadow-slate-200/60'
@@ -759,7 +839,7 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                   <PenLine size={14} className="text-indigo-400" />
@@ -774,13 +854,13 @@ const App: React.FC = () => {
                 onChange={(event) => setNote(event.target.value)}
                 onBlur={handleNoteBlur}
                 placeholder="Briefly, what happened?"
-                className="w-full h-24 p-5 bg-slate-50 border border-slate-200 rounded-[1.5rem] focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all resize-none text-slate-700 leading-relaxed font-medium placeholder:text-slate-300 text-sm"
+                className="w-full h-20 p-4 bg-slate-50 border border-slate-200 rounded-[1.25rem] focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all resize-none text-slate-700 leading-relaxed font-medium placeholder:text-slate-300 text-sm"
               />
             </div>
           </div>
 
           {currentEntry && (
-            <div className="px-8 pb-6 flex justify-center">
+            <div className="px-6 pb-4 flex justify-center">
               <button
                 onClick={deleteEntry}
                 className="group flex items-center gap-2 text-[10px] font-black text-slate-300 hover:text-red-500 transition-all uppercase tracking-widest"
@@ -791,8 +871,8 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <section className="space-y-4">
-          <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
+        <section className="space-y-3">
+          <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
                 <TrendingUp size={16} className="text-indigo-600" />
@@ -801,6 +881,18 @@ const App: React.FC = () => {
             </h3>
             {history.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={toggleOriginalCurve}
+                  title="Toggle original recorded curve"
+                  className={`h-9 px-3 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
+                    activeTrack.showOriginalCurve
+                      ? 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <TrendingUp size={14} />
+                  Original
+                </button>
                 <button
                   onClick={toggleLeastSquares}
                   disabled={history.length < 2}
@@ -847,7 +939,7 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <div className="bg-white rounded-[2rem] shadow-lg shadow-slate-200/40 p-6 border border-slate-100">
+          <div className="bg-white rounded-[1.5rem] shadow-lg shadow-slate-200/40 p-3 sm:p-4 border border-slate-100">
             {history.length > 0 ? (
               <HistoryChart
                 data={history}
@@ -855,11 +947,12 @@ const App: React.FC = () => {
                 minValue={activeTrack.minScore}
                 maxValue={activeTrack.maxScore}
                 trackName={activeTrack.name}
+                showOriginalCurve={activeTrack.showOriginalCurve}
                 showLeastSquares={activeTrack.showLeastSquares}
                 showEma={activeTrack.showEma}
               />
             ) : (
-              <div className="h-[250px] flex flex-col items-center justify-center text-slate-300 gap-4">
+              <div className="h-[220px] flex flex-col items-center justify-center text-slate-300 gap-3">
                 <div className="bg-slate-50 p-6 rounded-full">
                   <Info size={32} className="text-slate-200" />
                 </div>
@@ -870,7 +963,7 @@ const App: React.FC = () => {
         </section>
 
         {history.length > 0 && (
-          <section className="space-y-4">
+          <section className="space-y-3">
             <div className="flex items-center justify-between px-2">
               <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
@@ -880,11 +973,11 @@ const App: React.FC = () => {
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[...history].reverse().slice(0, 4).map((entry) => (
                 <div
                   key={entry.date}
-                  className="bg-white p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex gap-4 items-start group hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
+                  className="bg-white p-4 rounded-[1.25rem] border border-slate-100 shadow-sm flex gap-3 items-start group hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
                 >
                   <div className={`
                     w-12 h-12 rounded-xl flex items-center justify-center shrink-0 font-black text-xl shadow-lg
@@ -913,9 +1006,11 @@ const App: React.FC = () => {
             </div>
           </section>
         )}
+          </>
+        )}
       </main>
 
-      <footer className="mt-12 text-center text-slate-300 text-[9px] pb-10 uppercase tracking-[0.4em] font-black opacity-40">
+      <footer className="mt-8 text-center text-slate-300 text-[9px] pb-8 uppercase tracking-[0.4em] font-black opacity-40">
         <p>Private & Offline - dailyrush</p>
       </footer>
     </div>

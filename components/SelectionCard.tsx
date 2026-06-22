@@ -63,16 +63,16 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
       );
 
   return (
-    <div className="w-full py-4 select-none">
+    <div className="w-full py-2 select-none">
       {/* Big Visual Indicator */}
-      <div className="flex flex-col items-center mb-8">
+      <div className="flex flex-col items-center mb-5">
         <div 
           className="relative group cursor-default"
           style={{ transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
         >
           <div 
             className={`
-              w-24 h-24 rounded-[2rem] flex items-center justify-center text-5xl font-black text-white shadow-2xl transition-all duration-500
+              w-20 h-20 sm:w-24 sm:h-24 rounded-[1.5rem] flex items-center justify-center text-4xl sm:text-5xl font-black text-white shadow-2xl transition-all duration-500
               ${isDragging ? 'scale-110 rotate-3' : 'scale-100'}
             `}
             style={{ backgroundColor: getThemeColor(sliderValue) }}
@@ -85,16 +85,16 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
             style={{ backgroundColor: getThemeColor(sliderValue) }}
           />
         </div>
-        <div className="mt-4 h-6">
+        <div className="mt-3 h-5">
           <span className={`text-sm font-bold uppercase tracking-[0.2em] transition-colors duration-500 ${getColorClass(sliderValue)}`}>
             {getMoodLabel(sliderValue)}
           </span>
         </div>
       </div>
 
-      <div className="relative pt-6 pb-10 px-4">
+      <div className="relative pt-4 pb-6 px-4">
         {/* The Slider Track Background */}
-        <div className="absolute top-[34px] left-6 right-6 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+        <div className="absolute top-[26px] left-6 right-6 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
           <div 
             className="h-full transition-all duration-500 ease-out opacity-30"
             style={{ 
@@ -116,7 +116,7 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
           onMouseUp={() => setIsDragging(false)}
           onTouchStart={() => setIsDragging(true)}
           onTouchEnd={() => setIsDragging(false)}
-          className="relative w-full h-10 bg-transparent appearance-none cursor-grab active:cursor-grabbing z-20 focus:outline-none 
+          className="relative w-full h-8 bg-transparent appearance-none cursor-grab active:cursor-grabbing z-20 focus:outline-none
             [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-10 [&::-webkit-slider-thumb]:h-10 
             [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white 
             [&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-current
@@ -129,7 +129,7 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
         />
 
         {/* Tapable Tick Marks & Numbers */}
-        <div className="flex justify-between mt-4 relative z-10">
+        <div className="flex justify-between mt-3 relative z-10">
           {ticks.map((tick) => (
             <button
               key={tick}
@@ -162,7 +162,7 @@ const SelectionCard: React.FC<SelectionCardProps> = ({ onSelect, currentSelectio
         </div>
         
         {/* Intuitive help text */}
-        <div className="flex justify-between mt-2 px-1 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+        <div className="flex justify-between mt-1 px-1 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
           <span>Low</span>
           <span>High</span>
         </div>

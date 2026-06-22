@@ -18,6 +18,7 @@ interface HistoryChartProps {
   minValue: number;
   maxValue: number;
   trackName: string;
+  showOriginalCurve: boolean;
   showLeastSquares: boolean;
   showEma: boolean;
 }
@@ -107,17 +108,17 @@ const addEmaValues = (points: ChartPoint[]) => {
 const CustomTooltip = ({ active, payload, mode, minValue, maxValue, trackName }: any) => {
   if (active && payload && payload.length) {
     const data: ChartPoint = payload[0].payload;
-    const date = new Date(data.time).toLocaleDateString('en-US', {
+    const date = new Date(data.time).toLocaleDateString('en-GB', {
+      weekday: 'long',
       month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+      day: 'numeric'
+    }).replace(',', '');
     const ratio = (data.value - minValue) / Math.max(maxValue - minValue, 1);
 
     return (
-      <div className="bg-white p-4 border border-slate-200 shadow-2xl rounded-2xl max-w-xs">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-50 pb-1">{date}</p>
-        <div className="flex items-center gap-3 mb-3">
+      <div className="bg-white p-3 border border-slate-200 shadow-2xl rounded-2xl max-w-xs">
+        <p className="text-[10px] font-bold text-slate-400 tracking-widest mb-2 border-b border-slate-50 pb-1">{date}</p>
+        <div className="flex items-center gap-3 mb-2">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-lg ${mode === 'point' ? 'bg-emerald-500' : ratio > 0.7 ? 'bg-green-500' : ratio > 0.3 ? 'bg-indigo-500' : 'bg-orange-500'}`}>
             {mode === 'point' ? '✓' : data.value}
           </div>
@@ -139,7 +140,7 @@ const CustomTooltip = ({ active, payload, mode, minValue, maxValue, trackName }:
   return null;
 };
 
-const HistoryChart: React.FC<HistoryChartProps> = ({ data, mode, minValue, maxValue, trackName, showLeastSquares, showEma }) => {
+const HistoryChart: React.FC<HistoryChartProps> = ({ data, mode, minValue, maxValue, trackName, showOriginalCurve, showLeastSquares, showEma }) => {
   const chartData = useMemo<ChartPoint[]>(() => {
     const sortedPoints = data
       .map((entry) => ({
@@ -178,11 +179,11 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ data, mode, minValue, maxVa
   };
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[320px] sm:h-[340px]">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={chartData}
-          margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+          margin={{ top: 8, right: 8, left: -28, bottom: 0 }}
         >
           <defs>
             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -222,17 +223,23 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ data, mode, minValue, maxVa
           {mode === 'score' && (
             <ReferenceLine y={minValue + (maxValue - minValue) / 2} stroke="#f1f5f9" strokeDasharray="3 3" />
           )}
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke={lineColor}
-            strokeWidth={4}
-            dot={{ r: 4, strokeWidth: 3, stroke: '#ffffff', fill: lineColor }}
-            fillOpacity={1}
-            fill="url(#colorValue)"
-            animationDuration={1000}
-            activeDot={{ r: 8, strokeWidth: 0, fill: lineColor }}
-          />
+          {showOriginalCurve && (
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke={lineColor}
+              strokeWidth={4}
+              dot={mode === 'point'
+                ? { r: 7, strokeWidth: 4, stroke: '#ffffff', fill: lineColor }
+                : { r: 4, strokeWidth: 3, stroke: '#ffffff', fill: lineColor }}
+              fillOpacity={1}
+              fill="url(#colorValue)"
+              animationDuration={1000}
+              activeDot={mode === 'point'
+                ? { r: 11, strokeWidth: 0, fill: lineColor }
+                : { r: 8, strokeWidth: 0, fill: lineColor }}
+            />
+          )}
           {showEma && chartData.length > 1 && (
             <Line
               type="monotone"
